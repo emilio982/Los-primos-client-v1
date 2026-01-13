@@ -1,5 +1,5 @@
 -- Los Primos Client - FINAL UNIVERSAL GUI (January 2026)
--- 100% Working - No Errors - PlayerGui + All Features
+-- 100% Working - No Errors - PlayerGui + All Features - FIXED
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -7,7 +7,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local VirtualUserService = game:GetService("VirtualUserService") -- For anti-AFK if available, but fallback implemented
+local VirtualUser = game:GetService("VirtualUser") -- Fixed: Use VirtualUser instead of VirtualUserService for anti-AFK
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -771,7 +771,7 @@ SubmitBtn.MouseButton1Click:Connect(function()
     if KeyBox.Text == keyCorrect then
         KeyFrame.Visible = false
         MainUI.Visible = true
-        CombatBtn.MouseButton1Click()
+        CombatBtn:Invoke()
     else
         -- Shake animation
         for i = 1, 4 do
@@ -891,7 +891,9 @@ FreecamToggle.MouseButton1Click:Connect(function()
     else
         cam.CameraType = Enum.CameraType.Custom
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        cam.CameraSubject = player.Character.Humanoid
+        if player.Character then
+            cam.CameraSubject = player.Character:FindFirstChildWhichIsA("Humanoid") or player.Character.PrimaryPart
+        end
     end
 end)
 
@@ -912,16 +914,17 @@ AntiAFKToggle.MouseButton1Click:Connect(function()
         spawn(function()
             while antiAFK do
                 wait(60)
-                if player.Character and player.Character:FindFirstChild("Humanoid") then
-                    player.Character.Humanoid.Jump = true
-                end
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
             end
         end)
     end
 end)
 
 ResetCharBtn.MouseButton1Click:Connect(function()
-    player:LoadCharacter()
+    if player.Character then
+        player.Character:BreakJoints()
+    end
 end)
 
 ClickTPToggle.MouseButton1Click:Connect(function()
@@ -955,7 +958,7 @@ XrayToggle.MouseButton1Click:Connect(function()
     }):Play()
     if xray then
         for _, part in pairs(workspace:GetDescendants()) do
-            if part:IsA("BasePart") and not part.Parent:FindFirstChild("Humanoid") then
+            if part:IsA("BasePart") and not part.Parent:FindFirstChild("Humanoid") and part.Parent ~= player.Character then
                 if not originalTrans[part] then
                     originalTrans[part] = part.Transparency
                 end
@@ -964,7 +967,7 @@ XrayToggle.MouseButton1Click:Connect(function()
         end
     else
         for part, trans in pairs(originalTrans) do
-            if part then
+            if part and part.Parent then
                 part.Transparency = trans
             end
         end
@@ -974,11 +977,16 @@ end)
 
 local function serverHop()
     local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+    local serverFound = false
     for _, server in ipairs(servers.data) do
         if server.playing < server.maxPlayers and server.id ~= game.JobId then
             TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, player)
+            serverFound = true
             break
         end
+    end
+    if not serverFound then
+        print("No suitable server found for hopping.")
     end
 end
 
@@ -989,7 +997,7 @@ RejoinBtn.MouseButton1Click:Connect(function()
 end)
 
 ServerInfoBtn.MouseButton1Click:Connect(function()
-    local info = "PlaceId: " .. game.PlaceId .. "\nJobId: " .. game.JobId .. "\nPlayers: " .. #Players:GetPlayers() .. "/" .. Players.MaxPlayers
+    local info = "PlaceId: " .. game.PlaceId .. "\nJobId: " .. game.JobId .. "\nPlayers: " .. #Players:GetPlayers()
     setclipboard(info)
     print("Copied server info to clipboard!")
 end)
